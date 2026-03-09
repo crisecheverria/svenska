@@ -223,8 +223,12 @@ func checkAnswer(mode Mode, given, expected string) bool {
 		return given == expected
 	case ModeVocabulary, ModeTranslate:
 		g := normalize(given)
-		e := normalize(expected)
-		return g == e
+		for _, alt := range expandAlternatives(expected) {
+			if g == alt {
+				return true
+			}
+		}
+		return false
 	}
 	return false
 }
@@ -232,6 +236,49 @@ func checkAnswer(mode Mode, given, expected string) bool {
 func normalize(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.ToLower(s)
-	s = strings.TrimRight(s, ".")
-	return s
+	s = strings.TrimRight(s, ".!?")
+	return strings.TrimSpace(s)
+}
+
+// expandAlternatives generates all accepted forms of an expected answer.
+// For "yes (contradicting negative)" it accepts: the full string, "yes",
+// and "contradicting negative".
+// For "to go / walk" it accepts: "to go / walk", "to go", "walk".
+// For "coffee break / fika" it accepts all slash-separated parts too.
+func expandAlternatives(expected string) []string {
+	seen := make(map[string]bool)
+	add := func(s string) {
+		s = normalize(s)
+		if s != "" {
+			seen[s] = true
+		}
+	}
+
+	// Full string is always accepted
+	add(expected)
+
+	// Strip parenthetical suffix: "yes (contradicting negative)" -> "yes"
+	if idx := strings.Index(expected, "("); idx > 0 {
+		add(expected[:idx])
+		// Also accept the content inside parens
+		inner := expected[idx+1:]
+		inner = strings.TrimRight(inner, ")")
+		add(inner)
+	}
+
+	// Split on " / " for alternatives: "to go / walk" -> ["to go", "walk"]
+	parts := strings.Split(expected, " / ")
+	for _, p := range parts {
+		add(p)
+		// Each part may also have parentheticals
+		if idx := strings.Index(p, "("); idx > 0 {
+			add(p[:idx])
+		}
+	}
+
+	result := make([]string, 0, len(seen))
+	for k := range seen {
+		result = append(result, k)
+	}
+	return result
 }
