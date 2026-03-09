@@ -1,0 +1,237 @@
+package game
+
+import (
+	"math/rand"
+	"strings"
+
+	"github.com/crisecheverria/svenska/data"
+)
+
+type Mode int
+
+const (
+	ModeVocabulary Mode = iota
+	ModeTyping
+	ModeTranslate
+)
+
+func (m Mode) String() string {
+	switch m {
+	case ModeVocabulary:
+		return "Vocabulary"
+	case ModeTyping:
+		return "Typing"
+	case ModeTranslate:
+		return "Translate"
+	}
+	return ""
+}
+
+type Direction int
+
+const (
+	SvToEn Direction = iota
+	EnToSv
+)
+
+type Answer struct {
+	Sv      string
+	En      string
+	Given   string
+	Correct bool
+}
+
+type Challenge struct {
+	Prompt   string // what to show the user
+	Expected string // the correct answer
+	Sv       string
+	En       string
+}
+
+const ChallengesPerRound = 10
+
+type Round struct {
+	Mode       Mode
+	Direction  Direction
+	Category   string // category key or level key
+	Challenges []Challenge
+	Answers    []Answer
+	Current    int
+	Correct    int
+	Wrong      int
+}
+
+func NewVocabularyRound(categoryKey string, dir Direction) *Round {
+	var words []data.Word
+	if categoryKey == "all" {
+		words = data.AllWords()
+	} else {
+		for _, cat := range data.Categories {
+			if cat.Key == categoryKey {
+				words = cat.Words
+				break
+			}
+		}
+	}
+
+	shuffled := make([]data.Word, len(words))
+	copy(shuffled, words)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	count := ChallengesPerRound
+	if count > len(shuffled) {
+		count = len(shuffled)
+	}
+
+	challenges := make([]Challenge, count)
+	for i := 0; i < count; i++ {
+		w := shuffled[i]
+		if dir == SvToEn {
+			challenges[i] = Challenge{Prompt: w.Sv, Expected: w.En, Sv: w.Sv, En: w.En}
+		} else {
+			challenges[i] = Challenge{Prompt: w.En, Expected: w.Sv, Sv: w.Sv, En: w.En}
+		}
+	}
+
+	return &Round{
+		Mode:       ModeVocabulary,
+		Direction:  dir,
+		Category:   categoryKey,
+		Challenges: challenges,
+		Answers:    make([]Answer, 0, count),
+	}
+}
+
+func NewTypingRound(categoryKey string) *Round {
+	var words []data.Word
+	if categoryKey == "all" {
+		words = data.AllWords()
+	} else {
+		for _, cat := range data.Categories {
+			if cat.Key == categoryKey {
+				words = cat.Words
+				break
+			}
+		}
+	}
+
+	shuffled := make([]data.Word, len(words))
+	copy(shuffled, words)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	count := ChallengesPerRound
+	if count > len(shuffled) {
+		count = len(shuffled)
+	}
+
+	challenges := make([]Challenge, count)
+	for i := 0; i < count; i++ {
+		w := shuffled[i]
+		challenges[i] = Challenge{Prompt: w.Sv, Expected: w.Sv, Sv: w.Sv, En: w.En}
+	}
+
+	return &Round{
+		Mode:       ModeTyping,
+		Category:   categoryKey,
+		Challenges: challenges,
+		Answers:    make([]Answer, 0, count),
+	}
+}
+
+func NewTranslateRound(levelKey string, dir Direction) *Round {
+	var sentences []data.Sentence
+	if levelKey == "all" {
+		sentences = data.AllSentences()
+	} else {
+		for _, lvl := range data.Levels {
+			if lvl.Key == levelKey {
+				sentences = lvl.Sentences
+				break
+			}
+		}
+	}
+
+	shuffled := make([]data.Sentence, len(sentences))
+	copy(shuffled, sentences)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	count := ChallengesPerRound
+	if count > len(shuffled) {
+		count = len(shuffled)
+	}
+
+	challenges := make([]Challenge, count)
+	for i := 0; i < count; i++ {
+		s := shuffled[i]
+		if dir == SvToEn {
+			challenges[i] = Challenge{Prompt: s.Sv, Expected: s.En, Sv: s.Sv, En: s.En}
+		} else {
+			challenges[i] = Challenge{Prompt: s.En, Expected: s.Sv, Sv: s.Sv, En: s.En}
+		}
+	}
+
+	return &Round{
+		Mode:       ModeTranslate,
+		Direction:  dir,
+		Category:   levelKey,
+		Challenges: challenges,
+		Answers:    make([]Answer, 0, count),
+	}
+}
+
+func (r *Round) CurrentChallenge() Challenge {
+	return r.Challenges[r.Current]
+}
+
+func (r *Round) Submit(answer string) bool {
+	ch := r.Challenges[r.Current]
+	correct := checkAnswer(r.Mode, answer, ch.Expected)
+
+	r.Answers = append(r.Answers, Answer{
+		Sv:      ch.Sv,
+		En:      ch.En,
+		Given:   answer,
+		Correct: correct,
+	})
+
+	if correct {
+		r.Correct++
+	} else {
+		r.Wrong++
+	}
+	r.Current++
+	return correct
+}
+
+func (r *Round) Done() bool {
+	return r.Current >= len(r.Challenges)
+}
+
+func (r *Round) Total() int {
+	return len(r.Challenges)
+}
+
+func checkAnswer(mode Mode, given, expected string) bool {
+	switch mode {
+	case ModeTyping:
+		return given == expected
+	case ModeVocabulary, ModeTranslate:
+		g := normalize(given)
+		e := normalize(expected)
+		return g == e
+	}
+	return false
+}
+
+func normalize(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ToLower(s)
+	s = strings.TrimRight(s, ".")
+	return s
+}
