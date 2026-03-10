@@ -9,6 +9,7 @@ import (
 	"github.com/crisecheverria/svenska/ai"
 	"github.com/crisecheverria/svenska/data"
 	"github.com/crisecheverria/svenska/game"
+	"github.com/crisecheverria/svenska/updater"
 )
 
 type screen int
@@ -31,6 +32,11 @@ type aiHelpMsg struct {
 	err  error
 }
 
+// updateAvailableMsg is sent when the background update check completes
+type updateAvailableMsg struct {
+	info updater.UpdateInfo
+}
+
 type Model struct {
 	screen          screen
 	cursor          int
@@ -45,23 +51,34 @@ type Model struct {
 	helpText        string
 	helpLoad        bool
 	newAchievements []game.Achievement
+	version         string
+	updateAvailable string // new version string, empty if up to date
 }
 
-func NewModel() Model {
+func NewModel(version string) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Type your answer..."
 	ti.CharLimit = 200
 	ti.Width = 50
 
 	return Model{
-		screen: screenMenu,
-		stats:  game.LoadStats(),
-		input:  ti,
+		screen:  screenMenu,
+		stats:   game.LoadStats(),
+		input:   ti,
+		version: version,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.checkForUpdate())
+}
+
+func (m Model) checkForUpdate() tea.Cmd {
+	version := m.version
+	return func() tea.Msg {
+		info := updater.CheckForUpdate(version)
+		return updateAvailableMsg{info: info}
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -81,6 +98,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.helpText = "Error: " + msg.err.Error()
 		} else {
 			m.helpText = msg.text
+		}
+		return m, nil
+	case updateAvailableMsg:
+		if msg.info.Available {
+			m.updateAvailable = msg.info.NewVersion
 		}
 		return m, nil
 	}
@@ -212,6 +234,11 @@ func (m Model) viewMenu() string {
 	}
 	b.WriteString(dimStyle.Render(fmt.Sprintf("  Lv.%d %s  |  XP: %d/%d  |  Accuracy: %.0f%%%s",
 		lvl, lvlName, m.stats.XP, nextXP, m.stats.Accuracy(), streakStr)) + "\n")
+
+	if m.updateAvailable != "" {
+		b.WriteString("\n" + swedishStyle.Render(fmt.Sprintf("  New version v%s available!", m.updateAvailable)) +
+			dimStyle.Render("  Run: ") + progressStyle.Render("svenska update") + "\n")
+	}
 
 	b.WriteString("\n" + dimStyle.Render("  ↑↓/jk navigate  •  enter select  •  q quit") + "\n")
 
