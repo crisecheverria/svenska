@@ -30,18 +30,13 @@ func GetHelp(sv, en, context string) HelpResult {
 		sv, en, context,
 	)
 
-	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-		return callAnthropic(key, prompt)
-	}
-	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-		return callOpenAI(key, prompt)
-	}
-	return HelpResult{Err: fmt.Errorf("set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable AI help")}
+	// OpenRouter free models (no key required, but rate-limited)
+	return callOpenRouter(prompt)
 }
 
-func callAnthropic(key, prompt string) HelpResult {
+func callOpenRouter(prompt string) HelpResult {
 	body := map[string]any{
-		"model":      "claude-sonnet-4-20250514",
+		"model":      "nvidia/nemotron-3-nano-30b-a3b:free",
 		"max_tokens": 400,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
@@ -49,50 +44,17 @@ func callAnthropic(key, prompt string) HelpResult {
 	}
 	data, _ := json.Marshal(body)
 
-	req, _ := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(data))
+	req, _ := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", key)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("HTTP-Referer", "https://github.com/crisecheverria/svenska")
+	req.Header.Set("X-Title", "Svenska CLI")
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return HelpResult{Err: fmt.Errorf("API request failed: %w", err)}
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		return HelpResult{Err: fmt.Errorf("API error %d: %s", resp.StatusCode, string(raw))}
+	// Optional: use API key if provided for higher rate limits
+	if key := os.Getenv("OPENROUTER_API_KEY"); key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
 	}
 
-	var result struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-	json.Unmarshal(raw, &result)
-	if len(result.Content) > 0 {
-		return HelpResult{Text: result.Content[0].Text}
-	}
-	return HelpResult{Err: fmt.Errorf("empty response")}
-}
-
-func callOpenAI(key, prompt string) HelpResult {
-	body := map[string]any{
-		"model":      "gpt-4o-mini",
-		"max_tokens": 400,
-		"messages": []map[string]string{
-			{"role": "user", "content": prompt},
-		},
-	}
-	data, _ := json.Marshal(body)
-
-	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(data))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+key)
-
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return HelpResult{Err: fmt.Errorf("API request failed: %w", err)}
