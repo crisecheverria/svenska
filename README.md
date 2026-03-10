@@ -17,15 +17,17 @@ A terminal app for practicing Swedish (A1-A2 level), built with Go and [Bubble T
 
 ## Install
 
-### With Go
-
 ```bash
-go install github.com/crisecheverria/svenska@latest
+curl -sSL https://raw.githubusercontent.com/crisecheverria/svenska/main/install.sh | sh
 ```
 
-### From releases (no Go required)
+Works on macOS and Linux (amd64/arm64). No Go required.
 
-Download the binary for your platform from [Releases](https://github.com/crisecheverria/svenska/releases) and place it somewhere in your `PATH`.
+To update later:
+
+```bash
+svenska update
+```
 
 ## Usage
 
