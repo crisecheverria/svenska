@@ -39,9 +39,13 @@ During a challenge, type `?` and press enter to get AI help with the current wor
 
 ## AI Help
 
-AI help uses a **free model** via [OpenRouter](https://openrouter.ai/) — no API key or account needed. Just type `?` during any challenge.
+AI help uses **free models** via [OpenRouter](https://openrouter.ai/) — no API key or account needed. Just type `?` during any challenge.
 
-For higher rate limits, you can optionally set an OpenRouter API key:
+Models used (with automatic fallback):
+- Primary: `arcee-ai/trinity-large-preview:free`
+- Fallback: `nvidia/nemotron-3-nano-30b-a3b:free`
+
+For higher rate limits, you can optionally set an OpenRouter API key (Recommended):
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-..."
