@@ -32,18 +32,19 @@ type aiHelpMsg struct {
 }
 
 type Model struct {
-	screen    screen
-	cursor    int
-	mode      game.Mode
-	direction game.Direction
-	round     *game.Round
-	stats     *game.Stats
-	input     textinput.Model
-	lastRight bool
-	width     int
-	height    int
-	helpText  string
-	helpLoad  bool
+	screen          screen
+	cursor          int
+	mode            game.Mode
+	direction       game.Direction
+	round           *game.Round
+	stats           *game.Stats
+	input           textinput.Model
+	lastRight       bool
+	width           int
+	height          int
+	helpText        string
+	helpLoad        bool
+	newAchievements []game.Achievement
 }
 
 func NewModel() Model {
@@ -200,9 +201,17 @@ func (m Model) viewMenu() string {
 	}
 
 	b.WriteString("\n")
-	acc := m.stats.Accuracy()
-	b.WriteString(dimStyle.Render(fmt.Sprintf("  Sessions: %d  |  Accuracy: %.0f%%  |  Words practiced: %d",
-		m.stats.Sessions, acc, len(m.stats.WordsLearned))) + "\n")
+	lvl, lvlName := m.stats.Level()
+	nextXP := m.stats.NextLevelXP()
+	streakStr := ""
+	if m.stats.Streak > 0 {
+		streakStr = fmt.Sprintf("  |  Streak: %d day", m.stats.Streak)
+		if m.stats.Streak > 1 {
+			streakStr += "s"
+		}
+	}
+	b.WriteString(dimStyle.Render(fmt.Sprintf("  Lv.%d %s  |  XP: %d/%d  |  Accuracy: %.0f%%%s",
+		lvl, lvlName, m.stats.XP, nextXP, m.stats.Accuracy(), streakStr)) + "\n")
 
 	b.WriteString("\n" + dimStyle.Render("  ↑↓/jk navigate  •  enter select  •  q quit") + "\n")
 
@@ -500,6 +509,7 @@ func (m Model) updateFeedback(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			if m.round.Done() {
 				m.stats.RecordRound(m.round)
+				m.newAchievements = m.stats.CheckAchievements(m.round)
 				m.stats.Save()
 				m.screen = screenResults
 				m.cursor = 0
@@ -565,11 +575,28 @@ func (m Model) updateResults(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) viewResults() string {
 	var b strings.Builder
 
+	perfect := m.round.Correct == m.round.Total()
 	pct := float64(m.round.Correct) / float64(m.round.Total()) * 100
-	b.WriteString("\n" + titleStyle.Render("  Results") + "\n\n")
-	b.WriteString(fmt.Sprintf("  Score: %s / %d (%.0f%%)\n\n",
+
+	if perfect {
+		b.WriteString("\n")
+		b.WriteString(correctStyle.Render("  ★ ★ ★  PERFEKT!  ★ ★ ★") + "\n")
+		b.WriteString(swedishStyle.Render("  Fantastiskt! Du fick alla rätt!") + "\n\n")
+	} else {
+		b.WriteString("\n" + titleStyle.Render("  Results") + "\n\n")
+	}
+
+	b.WriteString(fmt.Sprintf("  Score: %s / %d (%.0f%%)\n",
 		correctStyle.Render(fmt.Sprintf("%d", m.round.Correct)),
 		m.round.Total(), pct))
+
+	// XP earned
+	xp := m.stats.XPForRound(m.round)
+	xpLine := fmt.Sprintf("  +%d XP", xp)
+	if perfect {
+		xpLine += " (includes perfect bonus!)"
+	}
+	b.WriteString(progressStyle.Render(xpLine) + "\n\n")
 
 	for i, a := range m.round.Answers {
 		mark := correctStyle.Render("✓")
@@ -584,6 +611,17 @@ func (m Model) viewResults() string {
 			b.WriteString("  " + dimStyle.Render("(you: "+a.Given+")"))
 		}
 		b.WriteString("\n")
+	}
+
+	// Show newly unlocked achievements
+	if len(m.newAchievements) > 0 {
+		b.WriteString("\n" + swedishStyle.Render("  ── Achievement Unlocked! ──") + "\n\n")
+		for _, a := range m.newAchievements {
+			b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
+				swedishStyle.Render(a.Icon),
+				correctStyle.Render(a.Name),
+				dimStyle.Render(a.Desc)))
+		}
 	}
 
 	b.WriteString("\n" + dimStyle.Render("  m menu  •  r replay  •  q quit") + "\n")
@@ -607,16 +645,78 @@ func (m Model) viewStats() string {
 	var b strings.Builder
 	s := m.stats
 
+	lvl, lvlName := s.Level()
+	nextXP := s.NextLevelXP()
+
 	b.WriteString("\n" + titleStyle.Render("  Statistics") + "\n\n")
+
+	// Level & XP
+	b.WriteString(fmt.Sprintf("  Level:               %s\n", swedishStyle.Render(fmt.Sprintf("Lv.%d %s", lvl, lvlName))))
+	b.WriteString(fmt.Sprintf("  XP:                  %s\n", progressStyle.Render(fmt.Sprintf("%d / %d", s.XP, nextXP))))
+	xpBar := renderProgressBar(s.XP, nextXP, 20)
+	b.WriteString(fmt.Sprintf("                       %s\n", xpBar))
+
+	// Streak
+	streakStr := fmt.Sprintf("%d day", s.Streak)
+	if s.Streak != 1 {
+		streakStr += "s"
+	}
+	b.WriteString(fmt.Sprintf("  Daily streak:        %s\n", swedishStyle.Render(streakStr)))
+
+	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  Sessions completed:  %s\n", correctStyle.Render(fmt.Sprintf("%d", s.Sessions))))
+	b.WriteString(fmt.Sprintf("  Perfect rounds:      %s\n", correctStyle.Render(fmt.Sprintf("%d", s.PerfectRounds))))
 	b.WriteString(fmt.Sprintf("  Total questions:     %d\n", s.TotalPlayed))
 	b.WriteString(fmt.Sprintf("  Correct answers:     %s\n", correctStyle.Render(fmt.Sprintf("%d", s.TotalCorrect))))
 	b.WriteString(fmt.Sprintf("  Wrong answers:       %s\n", wrongStyle.Render(fmt.Sprintf("%d", s.TotalWrong))))
 	b.WriteString(fmt.Sprintf("  Accuracy:            %.1f%%\n", s.Accuracy()))
 	b.WriteString(fmt.Sprintf("  Unique words learned: %d\n", len(s.WordsLearned)))
 
+	// Achievements
+	b.WriteString("\n" + titleStyle.Render("  Achievements") + "\n\n")
+	for _, a := range game.AllAchievements {
+		if s.HasAchievement(a.Key) {
+			b.WriteString(fmt.Sprintf("  %s  %s  %s  %s\n",
+				swedishStyle.Render(a.Icon),
+				correctStyle.Render(a.Name),
+				dimStyle.Render(a.Desc),
+				dimStyle.Render("("+s.Achievements[a.Key]+")")))
+		} else {
+			b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
+				dimStyle.Render("?"),
+				dimStyle.Render(a.Name),
+				dimStyle.Render(a.Desc)))
+		}
+	}
+
+	// Category mastery (top practiced)
+	if len(s.CategoryStats) > 0 {
+		b.WriteString("\n" + titleStyle.Render("  Category Mastery") + "\n\n")
+		for _, cat := range data.Categories {
+			mastery := s.CategoryMastery(cat.Key)
+			if mastery > 0 {
+				bar := renderProgressBar(int(mastery), 100, 15)
+				b.WriteString(fmt.Sprintf("  %-30s %s %.0f%%\n", cat.Name, bar, mastery))
+			}
+		}
+	}
+
 	b.WriteString("\n" + dimStyle.Render("  Press any key to go back") + "\n")
 	return b.String()
+}
+
+func renderProgressBar(current, max, width int) string {
+	if max <= 0 {
+		max = 1
+	}
+	ratio := float64(current) / float64(max)
+	if ratio > 1 {
+		ratio = 1
+	}
+	filled := int(ratio * float64(width))
+	empty := width - filled
+	bar := progressStyle.Render(strings.Repeat("█", filled)) + dimStyle.Render(strings.Repeat("░", empty))
+	return bar
 }
 
 // --- AI Help ---

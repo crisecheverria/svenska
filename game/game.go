@@ -266,13 +266,30 @@ func expandAlternatives(expected string) []string {
 		add(inner)
 	}
 
+	// Strip parens first for slash splitting
+	stripped := expected
+	if idx := strings.Index(stripped, "("); idx > 0 {
+		stripped = strings.TrimSpace(stripped[:idx])
+	}
+
 	// Split on " / " for alternatives: "to go / walk" -> ["to go", "walk"]
-	parts := strings.Split(expected, " / ")
-	for _, p := range parts {
-		add(p)
-		// Each part may also have parentheticals
-		if idx := strings.Index(p, "("); idx > 0 {
-			add(p[:idx])
+	for _, src := range []string{expected, stripped} {
+		parts := strings.Split(src, " / ")
+		for _, p := range parts {
+			add(p)
+			if idx := strings.Index(p, "("); idx > 0 {
+				add(p[:idx])
+			}
+		}
+	}
+
+	// Split on "/" (no spaces) for compact alternatives: "his/her own" -> ["his", "her own"]
+	for _, src := range []string{expected, stripped} {
+		parts := strings.Split(src, "/")
+		if len(parts) > 1 {
+			for _, p := range parts {
+				add(p)
+			}
 		}
 	}
 
