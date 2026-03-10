@@ -30,13 +30,25 @@ func GetHelp(sv, en, context string) HelpResult {
 		sv, en, context,
 	)
 
-	// OpenRouter free models (no key required, but rate-limited)
-	return callOpenRouter(prompt)
+	// OpenRouter free models — try primary, fall back to secondary
+	models := []string{
+		"arcee-ai/trinity-large-preview:free",
+		"nvidia/nemotron-3-nano-30b-a3b:free",
+	}
+	var lastErr error
+	for _, model := range models {
+		res := callOpenRouter(prompt, model)
+		if res.Err == nil {
+			return res
+		}
+		lastErr = res.Err
+	}
+	return HelpResult{Err: lastErr}
 }
 
-func callOpenRouter(prompt string) HelpResult {
+func callOpenRouter(prompt, model string) HelpResult {
 	body := map[string]any{
-		"model":      "nvidia/nemotron-3-nano-30b-a3b:free",
+		"model":      model,
 		"max_tokens": 400,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
