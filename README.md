@@ -13,7 +13,7 @@ A terminal app for practicing Swedish (A1-A2 level), built with Go and [Bubble T
 - **Gamification** — XP, levels, daily streaks, and achievements
 - **Statistics** — Track your progress, category mastery, and achievements across sessions
 - **Flexible matching** — Accepts partial answers, strips parentheticals, splits alternatives on `/`
-- 27 word categories and 4 sentence difficulty levels from Rivstart A1+A2
+- 27 word categories and 4 sentence difficulty levels 
 
 ## Install
 
@@ -54,8 +54,6 @@ export OPENROUTER_API_KEY="sk-or-..."
 Add it to your shell config (`~/.zshrc` or `~/.bashrc`) to persist across sessions.
 
 ## Data
-
-All vocabulary and sentences are sourced from **Rivstart A1+A2**, covering:
 
 - Greetings, pronouns, numbers, time, countries, professions, family, food, shopping, clothing, colors, home, furniture, body, health, weather, animals, verbs, adjectives, adverbs, prepositions, education, transport, leisure, everyday words, and conjunctions
 - 4 sentence levels: Beginner (A1), Elementary (A1-A2), Intermediate (A2), Advanced (A2+)
