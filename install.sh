@@ -2,7 +2,7 @@
 set -e
 
 REPO="crisecheverria/svenska"
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="${HOME}/.local/bin"
 
 # Detect OS
 OS="$(uname -s)"
@@ -51,13 +51,21 @@ else
 fi
 
 # Install
-if [ -w "$INSTALL_DIR" ]; then
-  mv svenska "$INSTALL_DIR/svenska"
-else
-  echo "Need sudo to install to $INSTALL_DIR"
-  sudo mv svenska "$INSTALL_DIR/svenska"
-fi
-
+mkdir -p "$INSTALL_DIR"
+mv svenska "$INSTALL_DIR/svenska"
 chmod +x "$INSTALL_DIR/svenska"
+
+# Check if INSTALL_DIR is in PATH
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*) ;;
+  *)
+    echo ""
+    echo "NOTE: $INSTALL_DIR is not in your PATH."
+    echo "Add this to your shell profile (~/.zshrc or ~/.bashrc):"
+    echo ""
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+    ;;
+esac
 
 echo "Done! Run 'svenska' to start learning Swedish."
