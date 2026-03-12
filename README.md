@@ -2,7 +2,7 @@
 
 A terminal app for practicing Swedish (A1-A2 level), built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-![Main Menu](screenshots/svenska-app.png)
+![Main Menu](screenshots/svenska-app.jpeg)
 
 ## Features
 
@@ -22,11 +22,11 @@ A terminal app for practicing Swedish (A1-A2 level), built with Go and [Bubble T
 
 | | |
 |---|---|
-| ![Vocabulary](screenshots/vocabulary.png) | ![Speed Round](screenshots/speed-round.png) |
+| ![Vocabulary](screenshots/vocabulary.jpeg) | ![Speed Round](screenshots/speed-round.jpeg) |
 | Vocabulary — translate words | Speed Round — 60s timed challenge |
-| ![Hardcore](screenshots/hardcore.png) | ![Roadmap](screenshots/roadmap.png) |
+| ![Hardcore](screenshots/hardcore.jpeg) | ![Roadmap](screenshots/roadmap.jpeg) |
 | Hardcore — no AI, no hints, 2x XP | Roadmap — your learning journey |
-| ![Results](screenshots/results.png) | ![Statistics](screenshots/statistics.png) |
+| ![Results](screenshots/results.jpeg) | ![Statistics](screenshots/statistics.jpeg) |
 | Results — round summary | Statistics — track your progress |
 
 ## Install
