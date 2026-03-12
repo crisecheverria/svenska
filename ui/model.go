@@ -975,6 +975,29 @@ func renderProgressBar(current, max, width int) string {
 	return bar
 }
 
+// wrapText wraps a single line of text to the given width, breaking on word boundaries.
+func wrapText(text string, maxWidth int) []string {
+	if len(text) <= maxWidth {
+		return []string{text}
+	}
+
+	var lines []string
+	for len(text) > maxWidth {
+		// Find last space before maxWidth
+		breakAt := strings.LastIndex(text[:maxWidth], " ")
+		if breakAt <= 0 {
+			// No space found, hard break
+			breakAt = maxWidth
+		}
+		lines = append(lines, text[:breakAt])
+		text = strings.TrimLeft(text[breakAt:], " ")
+	}
+	if text != "" {
+		lines = append(lines, text)
+	}
+	return lines
+}
+
 // --- Hardcore Mode Selection ---
 
 func (m Model) updateSelectHardcoreMode(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -1140,8 +1163,14 @@ func (m Model) viewHelp() string {
 	if m.helpLoad {
 		b.WriteString("  " + dimStyle.Render("Loading...") + "\n")
 	} else {
+		maxWidth := m.width - 4 // 2 padding each side
+		if maxWidth < 40 {
+			maxWidth = 40
+		}
 		for _, line := range strings.Split(m.helpText, "\n") {
-			b.WriteString("  " + line + "\n")
+			for _, wrapped := range wrapText(line, maxWidth) {
+				b.WriteString("  " + wrapped + "\n")
+			}
 		}
 	}
 

@@ -75,6 +75,8 @@ Prove your Swedish knowledge the hard way:
 
 AI help uses **free models** via [OpenRouter](https://openrouter.ai/) — no API key or account needed. Just type `?` during any challenge.
 
+> **Note:** AI-generated explanations are not perfect and may contain mistakes. Use them as a helpful guide, not as a definitive source. When in doubt, verify with a textbook or native speaker.
+
 Models used (with automatic fallback):
 - Primary: `arcee-ai/trinity-large-preview:free`
 - Fallback: `nvidia/nemotron-3-nano-30b-a3b:free`
