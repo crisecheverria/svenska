@@ -48,6 +48,18 @@ var (
 			Bold(true).
 			PaddingLeft(2)
 
+	timerStyle = lipgloss.NewStyle().
+			Foreground(colorYellow).
+			Bold(true)
+
+	timerLowStyle = lipgloss.NewStyle().
+			Foreground(colorRed).
+			Bold(true)
+
+	hardcoreStyle = lipgloss.NewStyle().
+			Foreground(colorPurple).
+			Bold(true)
+
 	dimStyle = lipgloss.NewStyle().
 			Foreground(colorDim)
 

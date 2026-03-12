@@ -22,8 +22,10 @@ type Stats struct {
 	Streak        int                      `json:"streak"`
 	LastPlayed    string                   `json:"last_played"`
 	PerfectRounds int                      `json:"perfect_rounds"`
-	CategoryStats map[string]CategoryStats `json:"category_stats"`
-	Achievements  map[string]string        `json:"achievements"` // key -> date unlocked
+	CategoryStats  map[string]CategoryStats `json:"category_stats"`
+	Achievements   map[string]string        `json:"achievements"` // key -> date unlocked
+	BestSpeedScore int                      `json:"best_speed_score"`
+	HardcoreRounds int                      `json:"hardcore_rounds"`
 }
 
 type Achievement struct {
@@ -39,6 +41,28 @@ var AllAchievements = []Achievement{
 	{"polyglot", "Polyglott", "Practice all 27 categories", "◆◆"},
 	{"on_fire", "Eldsjäl", "Reach a 7-day streak", "▲▲"},
 	{"century", "Hundra", "Answer 100 questions correctly", "●●"},
+	{"speed_demon", "Snabbis", "Complete a speed round", "▸▸"},
+	{"hardcore_hero", "Hårding", "Complete a hardcore round", "■■"},
+	{"speed_master", "Blixt", "Get 20+ in a speed round", "◇◇"},
+}
+
+// RoadmapLevel describes what each level unlocks/recommends.
+type RoadmapLevel struct {
+	Level int
+	Name  string
+	XP    int
+	Desc  string
+}
+
+var RoadmapLevels = []RoadmapLevel{
+	{1, "Nybörjare", 0, "Greetings, Numbers, Pronouns"},
+	{2, "Elev", 100, "Colors, Family, Food & Drink"},
+	{3, "Studerande", 300, "Verbs, Adjectives, Beginner sentences"},
+	{4, "Praktikant", 600, "Professions, Shopping, Elementary sentences"},
+	{5, "Kunnig", 1000, "Intermediate sentences, Speed Rounds"},
+	{6, "Avancerad", 1800, "Challenge yourself with Hardcore mode"},
+	{7, "Expert", 3000, "Master Advanced sentences"},
+	{8, "Mästare", 5000, "Du har bemästrat svenskan!"},
 }
 
 // XP rewards
@@ -124,9 +148,20 @@ func (s *Stats) RecordRound(r *Round) {
 	}
 
 	// Perfect round bonus
-	if r.Correct == r.Total() {
+	if r.Correct == r.Total() && !r.Timed {
 		roundXP += XPPerfectRound
 		s.PerfectRounds++
+	}
+
+	// Hardcore: double XP
+	if r.Hardcore {
+		roundXP *= 2
+		s.HardcoreRounds++
+	}
+
+	// Speed round: track best score
+	if r.Timed && r.Correct > s.BestSpeedScore {
+		s.BestSpeedScore = r.Correct
 	}
 
 	s.XP += roundXP
@@ -201,8 +236,11 @@ func (s *Stats) XPForRound(r *Round) int {
 			streak = 0
 		}
 	}
-	if r.Correct == r.Total() {
+	if r.Correct == r.Total() && !r.Timed {
 		xp += XPPerfectRound
+	}
+	if r.Hardcore {
+		xp *= 2
 	}
 	return xp
 }
@@ -263,6 +301,21 @@ func (s *Stats) CheckAchievements(r *Round) []Achievement {
 	// Century: 100 correct answers
 	if s.TotalCorrect >= 100 {
 		unlock("century")
+	}
+
+	// Speed Demon: complete a speed round
+	if r != nil && r.Timed {
+		unlock("speed_demon")
+	}
+
+	// Hardcore Hero: complete a hardcore round
+	if r != nil && r.Hardcore && !r.Timed {
+		unlock("hardcore_hero")
+	}
+
+	// Speed Master: 20+ correct in a speed round
+	if r != nil && r.Timed && r.Correct >= 20 {
+		unlock("speed_master")
 	}
 
 	return newlyUnlocked

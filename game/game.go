@@ -49,6 +49,7 @@ type Challenge struct {
 }
 
 const ChallengesPerRound = 10
+const SpeedChallengesPool = 100
 
 type Round struct {
 	Mode       Mode
@@ -57,8 +58,10 @@ type Round struct {
 	Challenges []Challenge
 	Answers    []Answer
 	Current    int
-	Correct    int
-	Wrong      int
+	Correct  int
+	Wrong    int
+	Hardcore bool
+	Timed    bool
 }
 
 func NewVocabularyRound(categoryKey string, dir Direction) *Round {
@@ -185,13 +188,47 @@ func NewTranslateRound(levelKey string, dir Direction) *Round {
 	}
 }
 
+func NewSpeedRound(dir Direction, hardcore bool) *Round {
+	words := data.AllWords()
+	shuffled := make([]data.Word, len(words))
+	copy(shuffled, words)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	count := SpeedChallengesPool
+	if count > len(shuffled) {
+		count = len(shuffled)
+	}
+
+	challenges := make([]Challenge, count)
+	for i := 0; i < count; i++ {
+		w := shuffled[i]
+		if dir == SvToEn {
+			challenges[i] = Challenge{Prompt: w.Sv, Expected: w.En, Sv: w.Sv, En: w.En}
+		} else {
+			challenges[i] = Challenge{Prompt: w.En, Expected: w.Sv, Sv: w.Sv, En: w.En}
+		}
+	}
+
+	return &Round{
+		Mode:       ModeVocabulary,
+		Direction:  dir,
+		Category:   "all",
+		Challenges: challenges,
+		Answers:    make([]Answer, 0, count),
+		Timed:      true,
+		Hardcore:   hardcore,
+	}
+}
+
 func (r *Round) CurrentChallenge() Challenge {
 	return r.Challenges[r.Current]
 }
 
 func (r *Round) Submit(answer string) bool {
 	ch := r.Challenges[r.Current]
-	correct := checkAnswer(r.Mode, answer, ch.Expected)
+	correct := checkAnswer(r.Mode, answer, ch.Expected, r.Hardcore)
 
 	r.Answers = append(r.Answers, Answer{
 		Sv:      ch.Sv,
@@ -213,16 +250,25 @@ func (r *Round) Done() bool {
 	return r.Current >= len(r.Challenges)
 }
 
+// Finish ends a timed round early, truncating challenges to what was answered.
+func (r *Round) Finish() {
+	r.Challenges = r.Challenges[:len(r.Answers)]
+	r.Current = len(r.Answers)
+}
+
 func (r *Round) Total() int {
 	return len(r.Challenges)
 }
 
-func checkAnswer(mode Mode, given, expected string) bool {
+func checkAnswer(mode Mode, given, expected string, hardcore bool) bool {
 	switch mode {
 	case ModeTyping:
 		return given == expected
 	case ModeVocabulary, ModeTranslate:
 		g := normalize(given)
+		if hardcore {
+			return g == normalize(expected)
+		}
 		for _, alt := range expandAlternatives(expected) {
 			if g == alt {
 				return true
