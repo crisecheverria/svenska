@@ -278,7 +278,7 @@ var Categories = []Category{
 			{"advokat", "lawyer"},
 			{"journalist", "journalist"},
 			{"fotograf", "photographer"},
-			{"polis", "police officer"},
+			{"polis", "police"},
 			{"servitör", "waiter"},
 			{"frisör", "hairdresser"},
 			{"ekonom", "economist"},

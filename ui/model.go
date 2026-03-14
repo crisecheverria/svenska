@@ -27,6 +27,7 @@ const (
 	screenHelp
 	screenSelectHardcoreMode
 	screenRoadmap
+	screenSelectTypingSource
 )
 
 // aiHelpMsg is sent when the AI help request completes
@@ -66,8 +67,9 @@ type Model struct {
 	version         string
 	updateAvailable string // new version string, empty if up to date
 	hardcore        bool
-	speedMode       bool
-	timerSeconds    int
+	speedMode        bool
+	timerSeconds     int
+	typingSentences  bool
 }
 
 func NewModel(version string) Model {
@@ -160,6 +162,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateSelectHardcoreMode(msg)
 	case screenRoadmap:
 		return m.updateRoadmap(msg)
+	case screenSelectTypingSource:
+		return m.updateSelectTypingSource(msg)
 	}
 	return m, nil
 }
@@ -188,6 +192,8 @@ func (m Model) View() string {
 		return m.viewSelectHardcoreMode()
 	case screenRoadmap:
 		return m.viewRoadmap()
+	case screenSelectTypingSource:
+		return m.viewSelectTypingSource()
 	}
 	return ""
 }
@@ -219,7 +225,7 @@ func (m Model) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = game.ModeTyping
 				m.hardcore = false
 				m.speedMode = false
-				m.screen = screenSelectCategory
+				m.screen = screenSelectTypingSource
 				m.cursor = 0
 			case 2:
 				m.mode = game.ModeTranslate
@@ -322,13 +328,14 @@ func (m Model) updateSelectCategory(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "esc", "b":
-			if m.hardcore {
+			if m.mode == game.ModeTyping {
+				m.screen = screenSelectTypingSource
+			} else if m.hardcore {
 				m.screen = screenSelectHardcoreMode
-				m.cursor = 0
 			} else {
 				m.screen = screenMenu
-				m.cursor = 0
 			}
+			m.cursor = 0
 			return m, nil
 		case "up", "k":
 			if m.cursor > 0 {
@@ -423,13 +430,14 @@ func (m Model) updateSelectLevel(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "esc", "b":
-			if m.hardcore {
+			if m.mode == game.ModeTyping {
+				m.screen = screenSelectTypingSource
+			} else if m.hardcore {
 				m.screen = screenSelectHardcoreMode
-				m.cursor = 0
 			} else {
 				m.screen = screenMenu
-				m.cursor = 0
 			}
+			m.cursor = 0
 			return m, nil
 		case "up", "k":
 			if m.cursor > 0 {
@@ -441,6 +449,17 @@ func (m Model) updateSelectLevel(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			lvl := items[m.cursor].key
+			if m.mode == game.ModeTyping {
+				m.round = game.NewTypingSentenceRound(lvl)
+				m.typingSentences = true
+				if m.hardcore {
+					m.round.Hardcore = true
+				}
+				m.screen = screenPlaying
+				m.input.SetValue("")
+				m.input.Focus()
+				return m, textinput.Blink
+			}
 			m.round = &game.Round{Category: lvl}
 			m.screen = screenSelectDirection
 			m.cursor = 0
@@ -453,7 +472,14 @@ func (m Model) viewSelectLevel() string {
 	var b strings.Builder
 	items := m.levelItems()
 
-	b.WriteString("\n" + titleStyle.Render("  Select Level") + "  " + dimStyle.Render("Translate") + "\n\n")
+	modeLabel := "Translate"
+	if m.mode == game.ModeTyping {
+		modeLabel = "Typing"
+	}
+	if m.hardcore {
+		modeLabel += " [HARDCORE]"
+	}
+	b.WriteString("\n" + titleStyle.Render("  Select Level") + "  " + dimStyle.Render(modeLabel) + "\n\n")
 
 	for i, item := range items {
 		cursor := "  "
@@ -463,6 +489,69 @@ func (m Model) viewSelectLevel() string {
 			style = selectedStyle
 		}
 		b.WriteString(cursor + style.Render(item.name) + "\n")
+	}
+
+	b.WriteString("\n" + dimStyle.Render("  ↑↓/jk navigate  •  enter select  •  b back") + "\n")
+	return b.String()
+}
+
+// --- Typing source selection (Words vs Sentences) ---
+
+func (m Model) updateSelectTypingSource(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if msg, ok := msg.(tea.KeyMsg); ok {
+		switch msg.String() {
+		case "esc", "b":
+			if m.hardcore {
+				m.screen = screenSelectHardcoreMode
+			} else {
+				m.screen = screenMenu
+			}
+			m.cursor = 0
+			return m, nil
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < 1 {
+				m.cursor++
+			}
+		case "enter":
+			if m.cursor == 0 {
+				m.typingSentences = false
+				m.screen = screenSelectCategory
+			} else {
+				m.typingSentences = true
+				m.screen = screenSelectLevel
+			}
+			m.cursor = 0
+		}
+	}
+	return m, nil
+}
+
+func (m Model) viewSelectTypingSource() string {
+	var b strings.Builder
+
+	modeLabel := "Typing"
+	if m.hardcore {
+		modeLabel += " [HARDCORE]"
+	}
+	b.WriteString("\n" + titleStyle.Render("  "+modeLabel) + "  " + dimStyle.Render("What to type?") + "\n\n")
+
+	items := []struct{ title, desc string }{
+		{"Words", "Type Swedish words exactly"},
+		{"Sentences", "Type Swedish sentences exactly"},
+	}
+
+	for i, item := range items {
+		cursor := "  "
+		style := menuItemStyle
+		if i == m.cursor {
+			cursor = promptStyle.Render("▸ ")
+			style = selectedStyle
+		}
+		b.WriteString(cursor + style.Render(item.title) + "  " + dimStyle.Render(item.desc) + "\n")
 	}
 
 	b.WriteString("\n" + dimStyle.Render("  ↑↓/jk navigate  •  enter select  •  b back") + "\n")
@@ -664,13 +753,17 @@ func (m Model) viewPlaying() string {
 			b.WriteString("  " + dimStyle.Render("Translate to Swedish") + "\n\n")
 		}
 	case game.ModeTyping:
+		hint := "Type the Swedish word exactly"
+		if m.typingSentences {
+			hint = "Type the Swedish sentence exactly"
+		}
 		if m.hardcore {
 			// No English hint in hardcore mode
 			b.WriteString("  " + swedishStyle.Render(ch.Prompt) + "\n")
-			b.WriteString("  " + dimStyle.Render("Type the Swedish word exactly") + "\n\n")
+			b.WriteString("  " + dimStyle.Render(hint) + "\n\n")
 		} else {
 			b.WriteString("  " + swedishStyle.Render(ch.Prompt) + "  " + dimStyle.Render("("+ch.En+")") + "\n")
-			b.WriteString("  " + dimStyle.Render("Type the Swedish word exactly") + "\n\n")
+			b.WriteString("  " + dimStyle.Render(hint) + "\n\n")
 		}
 	case game.ModeTranslate:
 		if m.direction == game.SvToEn {
@@ -766,7 +859,11 @@ func (m Model) updateResults(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case game.ModeVocabulary:
 				m.round = game.NewVocabularyRound(cat, dir)
 			case game.ModeTyping:
-				m.round = game.NewTypingRound(cat)
+				if m.typingSentences {
+					m.round = game.NewTypingSentenceRound(cat)
+				} else {
+					m.round = game.NewTypingRound(cat)
+				}
 			case game.ModeTranslate:
 				m.round = game.NewTranslateRound(cat, dir)
 			}
@@ -1025,7 +1122,7 @@ func (m Model) updateSelectHardcoreMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 			case 1:
 				m.mode = game.ModeTyping
-				m.screen = screenSelectCategory
+				m.screen = screenSelectTypingSource
 				m.cursor = 0
 			case 2:
 				m.mode = game.ModeTranslate

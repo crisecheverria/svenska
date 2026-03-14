@@ -145,6 +145,44 @@ func NewTypingRound(categoryKey string) *Round {
 	}
 }
 
+func NewTypingSentenceRound(levelKey string) *Round {
+	var sentences []data.Sentence
+	if levelKey == "all" {
+		sentences = data.AllSentences()
+	} else {
+		for _, lvl := range data.Levels {
+			if lvl.Key == levelKey {
+				sentences = lvl.Sentences
+				break
+			}
+		}
+	}
+
+	shuffled := make([]data.Sentence, len(sentences))
+	copy(shuffled, sentences)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	count := ChallengesPerRound
+	if count > len(shuffled) {
+		count = len(shuffled)
+	}
+
+	challenges := make([]Challenge, count)
+	for i := 0; i < count; i++ {
+		s := shuffled[i]
+		challenges[i] = Challenge{Prompt: s.Sv, Expected: s.Sv, Sv: s.Sv, En: s.En}
+	}
+
+	return &Round{
+		Mode:       ModeTyping,
+		Category:   levelKey,
+		Challenges: challenges,
+		Answers:    make([]Answer, 0, count),
+	}
+}
+
 func NewTranslateRound(levelKey string, dir Direction) *Round {
 	var sentences []data.Sentence
 	if levelKey == "all" {
@@ -264,7 +302,7 @@ func checkAnswer(mode Mode, given, expected string, hardcore bool) bool {
 	switch mode {
 	case ModeTyping:
 		return given == expected
-	case ModeVocabulary, ModeTranslate:
+	case ModeVocabulary:
 		g := normalize(given)
 		if hardcore {
 			return g == normalize(expected)
@@ -275,8 +313,60 @@ func checkAnswer(mode Mode, given, expected string, hardcore bool) bool {
 			}
 		}
 		return false
+	case ModeTranslate:
+		g := normalize(given)
+		if hardcore {
+			return g == normalize(expected)
+		}
+		alts := expandAlternatives(expected)
+		for _, alt := range alts {
+			if g == alt {
+				return true
+			}
+		}
+		// Fuzzy matching for sentences: allow minor differences like
+		// missing apostrophes, small typos, or dropped articles.
+		// Threshold scales with sentence length (min 2, ~10% of length).
+		for _, alt := range alts {
+			threshold := max(2, len([]rune(alt))/10)
+			if levenshtein(g, alt) <= threshold {
+				return true
+			}
+		}
+		return false
 	}
 	return false
+}
+
+// levenshtein returns the edit distance between two strings.
+func levenshtein(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	la, lb := len(ra), len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		prev[j] = j
+	}
+
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
 }
 
 func normalize(s string) string {
