@@ -2,9 +2,13 @@ package game
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
+
+	"github.com/crisecheverria/svenska/data"
 )
 
 type CategoryStats struct {
@@ -12,20 +16,29 @@ type CategoryStats struct {
 	Total   int `json:"total"`
 }
 
+// WordReview holds SM-2 spaced repetition data for a single word/sentence.
+type WordReview struct {
+	EF          float64 `json:"ef"`          // easiness factor (≥1.3, default 2.5)
+	Interval    int     `json:"interval"`    // days until next review
+	Repetitions int     `json:"repetitions"` // consecutive correct answers
+	NextReview  string  `json:"next_review"` // YYYY-MM-DD
+}
+
 type Stats struct {
-	TotalCorrect  int                      `json:"total_correct"`
-	TotalWrong    int                      `json:"total_wrong"`
-	TotalPlayed   int                      `json:"total_played"`
-	Sessions      int                      `json:"sessions"`
-	WordsLearned  map[string]int           `json:"words_learned"`
-	XP            int                      `json:"xp"`
-	Streak        int                      `json:"streak"`
-	LastPlayed    string                   `json:"last_played"`
-	PerfectRounds int                      `json:"perfect_rounds"`
+	TotalCorrect   int                      `json:"total_correct"`
+	TotalWrong     int                      `json:"total_wrong"`
+	TotalPlayed    int                      `json:"total_played"`
+	Sessions       int                      `json:"sessions"`
+	WordsLearned   map[string]int           `json:"words_learned"`
+	XP             int                      `json:"xp"`
+	Streak         int                      `json:"streak"`
+	LastPlayed     string                   `json:"last_played"`
+	PerfectRounds  int                      `json:"perfect_rounds"`
 	CategoryStats  map[string]CategoryStats `json:"category_stats"`
 	Achievements   map[string]string        `json:"achievements"` // key -> date unlocked
 	BestSpeedScore int                      `json:"best_speed_score"`
 	HardcoreRounds int                      `json:"hardcore_rounds"`
+	Reviews        map[string]*WordReview   `json:"reviews"`
 }
 
 type Achievement struct {
@@ -67,8 +80,8 @@ var RoadmapLevels = []RoadmapLevel{
 
 // XP rewards
 const (
-	XPPerCorrect  = 10
-	XPStreakBonus  = 5  // extra per correct when on a 3+ answer streak
+	XPPerCorrect   = 10
+	XPStreakBonus   = 5  // extra per correct when on a 3+ answer streak
 	XPPerfectRound = 50 // bonus for 10/10
 )
 
@@ -99,6 +112,7 @@ func LoadStats() *Stats {
 		WordsLearned:  make(map[string]int),
 		CategoryStats: make(map[string]CategoryStats),
 		Achievements:  make(map[string]string),
+		Reviews:       make(map[string]*WordReview),
 	}
 	data, err := os.ReadFile(statsPath())
 	if err != nil {
@@ -114,6 +128,9 @@ func LoadStats() *Stats {
 	if s.Achievements == nil {
 		s.Achievements = make(map[string]string)
 	}
+	if s.Reviews == nil {
+		s.Reviews = make(map[string]*WordReview)
+	}
 	return s
 }
 
@@ -123,6 +140,44 @@ func (s *Stats) Save() error {
 		return err
 	}
 	return os.WriteFile(statsPath(), data, 0o644)
+}
+
+// updateReview applies the SM-2 algorithm for a single word.
+// quality: 4 for correct, 1 for incorrect.
+func (s *Stats) updateReview(sv string, correct bool) {
+	r, ok := s.Reviews[sv]
+	if !ok {
+		r = &WordReview{EF: 2.5}
+		s.Reviews[sv] = r
+	}
+
+	quality := 1.0
+	if correct {
+		quality = 4.0
+	}
+
+	// Update easiness factor
+	r.EF = r.EF + (0.1 - (5-quality)*(0.08+(5-quality)*0.02))
+	if r.EF < 1.3 {
+		r.EF = 1.3
+	}
+
+	if correct {
+		switch r.Repetitions {
+		case 0:
+			r.Interval = 1
+		case 1:
+			r.Interval = 6
+		default:
+			r.Interval = int(math.Round(float64(r.Interval) * r.EF))
+		}
+		r.Repetitions++
+	} else {
+		r.Repetitions = 0
+		r.Interval = 1
+	}
+
+	r.NextReview = time.Now().AddDate(0, 0, r.Interval).Format("2006-01-02")
 }
 
 func (s *Stats) RecordRound(r *Round) {
@@ -166,11 +221,12 @@ func (s *Stats) RecordRound(r *Round) {
 
 	s.XP += roundXP
 
-	// Words learned
+	// Words learned + spaced repetition update
 	for _, a := range r.Answers {
 		if a.Correct {
 			s.WordsLearned[a.Sv]++
 		}
+		s.updateReview(a.Sv, a.Correct)
 	}
 
 	// Category mastery
@@ -251,6 +307,103 @@ func (s *Stats) CategoryMastery(catKey string) float64 {
 		return 0
 	}
 	return float64(cat.Correct) / float64(cat.Total) * 100
+}
+
+// PrioritizeWords sorts words by SM-2 review schedule.
+// Due/overdue words come first, then new words, then words not yet due.
+// Within each group, order is randomized.
+func (s *Stats) PrioritizeWords(words []data.Word) []data.Word {
+	today := time.Now().Truncate(24 * time.Hour)
+
+	type bucket struct {
+		word     data.Word
+		priority int // 2=due/overdue, 1=new, 0=not yet due
+		overdue  int // days overdue (for sub-sorting)
+	}
+
+	buckets := make([]bucket, len(words))
+	for i, w := range words {
+		r, ok := s.Reviews[w.Sv]
+		if !ok {
+			buckets[i] = bucket{word: w, priority: 1}
+			continue
+		}
+		next, err := time.Parse("2006-01-02", r.NextReview)
+		if err != nil {
+			buckets[i] = bucket{word: w, priority: 1}
+			continue
+		}
+		if !next.After(today) {
+			days := int(today.Sub(next).Hours() / 24)
+			buckets[i] = bucket{word: w, priority: 2, overdue: days}
+		} else {
+			buckets[i] = bucket{word: w, priority: 0}
+		}
+	}
+
+	// Shuffle within each priority group for variety
+	sort.SliceStable(buckets, func(i, j int) bool {
+		if buckets[i].priority != buckets[j].priority {
+			return buckets[i].priority > buckets[j].priority
+		}
+		if buckets[i].priority == 2 {
+			return buckets[i].overdue > buckets[j].overdue
+		}
+		return false
+	})
+
+	result := make([]data.Word, len(buckets))
+	for i, b := range buckets {
+		result[i] = b.word
+	}
+	return result
+}
+
+// PrioritizeSentences sorts sentences by SM-2 review schedule.
+func (s *Stats) PrioritizeSentences(sentences []data.Sentence) []data.Sentence {
+	today := time.Now().Truncate(24 * time.Hour)
+
+	type bucket struct {
+		sentence data.Sentence
+		priority int
+		overdue  int
+	}
+
+	buckets := make([]bucket, len(sentences))
+	for i, sent := range sentences {
+		r, ok := s.Reviews[sent.Sv]
+		if !ok {
+			buckets[i] = bucket{sentence: sent, priority: 1}
+			continue
+		}
+		next, err := time.Parse("2006-01-02", r.NextReview)
+		if err != nil {
+			buckets[i] = bucket{sentence: sent, priority: 1}
+			continue
+		}
+		if !next.After(today) {
+			days := int(today.Sub(next).Hours() / 24)
+			buckets[i] = bucket{sentence: sent, priority: 2, overdue: days}
+		} else {
+			buckets[i] = bucket{sentence: sent, priority: 0}
+		}
+	}
+
+	sort.SliceStable(buckets, func(i, j int) bool {
+		if buckets[i].priority != buckets[j].priority {
+			return buckets[i].priority > buckets[j].priority
+		}
+		if buckets[i].priority == 2 {
+			return buckets[i].overdue > buckets[j].overdue
+		}
+		return false
+	})
+
+	result := make([]data.Sentence, len(buckets))
+	for i, b := range buckets {
+		result[i] = b.sentence
+	}
+	return result
 }
 
 // CheckAchievements evaluates all achievements and returns any newly unlocked ones.

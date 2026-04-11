@@ -64,7 +64,7 @@ type Round struct {
 	Timed    bool
 }
 
-func NewVocabularyRound(categoryKey string, dir Direction) *Round {
+func NewVocabularyRound(categoryKey string, dir Direction, stats *Stats) *Round {
 	var words []data.Word
 	if categoryKey == "all" {
 		words = data.AllWords()
@@ -82,6 +82,11 @@ func NewVocabularyRound(categoryKey string, dir Direction) *Round {
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
+
+	// Apply spaced repetition ordering
+	if stats != nil {
+		shuffled = stats.PrioritizeWords(shuffled)
+	}
 
 	count := ChallengesPerRound
 	if count > len(shuffled) {
@@ -107,7 +112,7 @@ func NewVocabularyRound(categoryKey string, dir Direction) *Round {
 	}
 }
 
-func NewTypingRound(categoryKey string) *Round {
+func NewTypingRound(categoryKey string, stats *Stats) *Round {
 	var words []data.Word
 	if categoryKey == "all" {
 		words = data.AllWords()
@@ -125,6 +130,10 @@ func NewTypingRound(categoryKey string) *Round {
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
+
+	if stats != nil {
+		shuffled = stats.PrioritizeWords(shuffled)
+	}
 
 	count := ChallengesPerRound
 	if count > len(shuffled) {
@@ -145,7 +154,7 @@ func NewTypingRound(categoryKey string) *Round {
 	}
 }
 
-func NewTypingSentenceRound(levelKey string) *Round {
+func NewTypingSentenceRound(levelKey string, stats *Stats) *Round {
 	var sentences []data.Sentence
 	if levelKey == "all" {
 		sentences = data.AllSentences()
@@ -163,6 +172,10 @@ func NewTypingSentenceRound(levelKey string) *Round {
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
+
+	if stats != nil {
+		shuffled = stats.PrioritizeSentences(shuffled)
+	}
 
 	count := ChallengesPerRound
 	if count > len(shuffled) {
@@ -183,7 +196,7 @@ func NewTypingSentenceRound(levelKey string) *Round {
 	}
 }
 
-func NewTranslateRound(levelKey string, dir Direction) *Round {
+func NewTranslateRound(levelKey string, dir Direction, stats *Stats) *Round {
 	var sentences []data.Sentence
 	if levelKey == "all" {
 		sentences = data.AllSentences()
@@ -201,6 +214,10 @@ func NewTranslateRound(levelKey string, dir Direction) *Round {
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
+
+	if stats != nil {
+		shuffled = stats.PrioritizeSentences(shuffled)
+	}
 
 	count := ChallengesPerRound
 	if count > len(shuffled) {
@@ -226,13 +243,17 @@ func NewTranslateRound(levelKey string, dir Direction) *Round {
 	}
 }
 
-func NewSpeedRound(dir Direction, hardcore bool) *Round {
+func NewSpeedRound(dir Direction, hardcore bool, stats *Stats) *Round {
 	words := data.AllWords()
 	shuffled := make([]data.Word, len(words))
 	copy(shuffled, words)
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
+
+	if stats != nil {
+		shuffled = stats.PrioritizeWords(shuffled)
+	}
 
 	count := SpeedChallengesPool
 	if count > len(shuffled) {

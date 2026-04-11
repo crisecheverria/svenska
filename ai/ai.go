@@ -16,6 +16,10 @@ type HelpResult struct {
 }
 
 func GetHelp(sv, en, context string) HelpResult {
+	if os.Getenv("OPENROUTER_API_KEY") == "" {
+		return HelpResult{Err: fmt.Errorf("OPENROUTER_API_KEY not set — get a free key at https://openrouter.ai and export it")}
+	}
+
 	prompt := fmt.Sprintf(
 		"You are a Swedish language tutor for A1-A2 beginners.\n\n"+
 			"The student needs help with:\n"+
@@ -58,13 +62,9 @@ func callOpenRouter(prompt, model string) HelpResult {
 
 	req, _ := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENROUTER_API_KEY"))
 	req.Header.Set("HTTP-Referer", "https://github.com/crisecheverria/svenska")
 	req.Header.Set("X-Title", "Svenska CLI")
-
-	// Optional: use API key if provided for higher rate limits
-	if key := os.Getenv("OPENROUTER_API_KEY"); key != "" {
-		req.Header.Set("Authorization", "Bearer "+key)
-	}
 
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)

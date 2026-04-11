@@ -348,7 +348,7 @@ func (m Model) updateSelectCategory(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			cat := items[m.cursor].key
 			if m.mode == game.ModeTyping {
-				m.round = game.NewTypingRound(cat)
+				m.round = game.NewTypingRound(cat, m.stats)
 				if m.hardcore {
 					m.round.Hardcore = true
 				}
@@ -450,7 +450,7 @@ func (m Model) updateSelectLevel(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			lvl := items[m.cursor].key
 			if m.mode == game.ModeTyping {
-				m.round = game.NewTypingSentenceRound(lvl)
+				m.round = game.NewTypingSentenceRound(lvl, m.stats)
 				m.typingSentences = true
 				if m.hardcore {
 					m.round.Hardcore = true
@@ -594,7 +594,7 @@ func (m Model) updateSelectDirection(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.direction = game.EnToSv
 			}
 			if m.speedMode {
-				m.round = game.NewSpeedRound(m.direction, m.hardcore)
+				m.round = game.NewSpeedRound(m.direction, m.hardcore, m.stats)
 				m.timerSeconds = 60
 				m.screen = screenPlaying
 				m.input.SetValue("")
@@ -603,9 +603,9 @@ func (m Model) updateSelectDirection(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			cat := m.round.Category
 			if m.mode == game.ModeVocabulary {
-				m.round = game.NewVocabularyRound(cat, m.direction)
+				m.round = game.NewVocabularyRound(cat, m.direction, m.stats)
 			} else {
-				m.round = game.NewTranslateRound(cat, m.direction)
+				m.round = game.NewTranslateRound(cat, m.direction, m.stats)
 			}
 			if m.hardcore {
 				m.round.Hardcore = true
@@ -845,7 +845,7 @@ func (m Model) updateResults(msg tea.Msg) (tea.Model, tea.Cmd) {
 			wasTimed := m.round.Timed
 
 			if wasTimed {
-				m.round = game.NewSpeedRound(m.round.Direction, wasHardcore)
+				m.round = game.NewSpeedRound(m.round.Direction, wasHardcore, m.stats)
 				m.timerSeconds = 60
 				m.screen = screenPlaying
 				m.input.SetValue("")
@@ -857,15 +857,15 @@ func (m Model) updateResults(msg tea.Msg) (tea.Model, tea.Cmd) {
 			dir := m.round.Direction
 			switch m.round.Mode {
 			case game.ModeVocabulary:
-				m.round = game.NewVocabularyRound(cat, dir)
+				m.round = game.NewVocabularyRound(cat, dir, m.stats)
 			case game.ModeTyping:
 				if m.typingSentences {
-					m.round = game.NewTypingSentenceRound(cat)
+					m.round = game.NewTypingSentenceRound(cat, m.stats)
 				} else {
-					m.round = game.NewTypingRound(cat)
+					m.round = game.NewTypingRound(cat, m.stats)
 				}
 			case game.ModeTranslate:
-				m.round = game.NewTranslateRound(cat, dir)
+				m.round = game.NewTranslateRound(cat, dir, m.stats)
 			}
 			if wasHardcore {
 				m.round.Hardcore = true
