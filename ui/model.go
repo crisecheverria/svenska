@@ -28,6 +28,8 @@ const (
 	screenSelectHardcoreMode
 	screenRoadmap
 	screenSelectTypingSource
+	screenSelectStory
+	screenTypr
 )
 
 // aiHelpMsg is sent when the AI help request completes
@@ -67,9 +69,10 @@ type Model struct {
 	version         string
 	updateAvailable string // new version string, empty if up to date
 	hardcore        bool
-	speedMode        bool
-	timerSeconds     int
-	typingSentences  bool
+	speedMode       bool
+	timerSeconds    int
+	typingSentences bool
+	typr            typrState
 }
 
 func NewModel(version string) Model {
@@ -136,6 +139,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tickCmd()
 		}
+		if m.screen == screenTypr && m.typr.started && !m.typr.finished {
+			return m, tickCmd()
+		}
 		return m, nil
 	}
 
@@ -164,6 +170,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateRoadmap(msg)
 	case screenSelectTypingSource:
 		return m.updateSelectTypingSource(msg)
+	case screenSelectStory:
+		return m.updateSelectStory(msg)
+	case screenTypr:
+		return m.updateTypr(msg)
 	}
 	return m, nil
 }
@@ -194,6 +204,10 @@ func (m Model) View() string {
 		return m.viewRoadmap()
 	case screenSelectTypingSource:
 		return m.viewSelectTypingSource()
+	case screenSelectStory:
+		return m.viewSelectStory()
+	case screenTypr:
+		return m.viewTypr()
 	}
 	return ""
 }
@@ -210,7 +224,7 @@ func (m Model) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < 7 {
+			if m.cursor < 8 {
 				m.cursor++
 			}
 		case "enter":
@@ -244,11 +258,14 @@ func (m Model) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.screen = screenSelectHardcoreMode
 				m.cursor = 0
 			case 5:
-				m.screen = screenRoadmap
+				m.screen = screenSelectStory
 				m.cursor = 0
 			case 6:
-				m.screen = screenStats
+				m.screen = screenRoadmap
+				m.cursor = 0
 			case 7:
+				m.screen = screenStats
+			case 8:
 				return m, tea.Quit
 			}
 		}
@@ -273,6 +290,7 @@ func (m Model) viewMenu() string {
 		{"Translate", "Translate full sentences"},
 		{"Speed Round", "Answer as many as you can in 60s"},
 		{"Hardcore", "No AI, no hints — prove yourself"},
+		{"Story Typer", "Type over Swedish stories"},
 		{"Roadmap", "Your learning journey"},
 		{"Statistics", "View your progress"},
 		{"Quit", "Exit the program"},
@@ -1167,7 +1185,7 @@ func (m Model) updateRoadmap(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc", "b", "q", "enter":
 			m.screen = screenMenu
-			m.cursor = 5
+			m.cursor = 6
 		}
 	}
 	return m, nil

@@ -63,6 +63,13 @@ var (
 	dimStyle = lipgloss.NewStyle().
 			Foreground(colorDim)
 
+	typrCursorStyle = lipgloss.NewStyle().
+			Reverse(true)
+
+	typrErrorStyle = lipgloss.NewStyle().
+			Foreground(colorRed).
+			Underline(true)
+
 	flagBlue = lipgloss.NewStyle().
 			Foreground(colorBlue)
 
